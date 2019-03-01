@@ -12,226 +12,211 @@
 	</style>
 </head>
 <body>
-	<script src="three.min.js"></script>
+	<script src="three.min.js"></script>oun
 	<script src='OrbitControls.js'></script>
 	<script>
-		// ------------------------------------------------------------ Scene ------------------------------------------------------------
-		var scene = new THREE.Scene( );
+		// ------------------------------------------------------------ Setup------------------------------------------------------------
+		// Scene & Controls
+		var scene = new THREE.Scene();
+		var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 3000);
+		camera.position.set(10, 10, 10);
+		camera.up = new THREE.Vector3(0, 1, 0);
+		camera.lookAt(new THREE.Vector3(0, 0, 0));
+		var controls = new THREE.OrbitControls(camera);
 		
-		var camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.1, 3000 );
-		var controls = new THREE.OrbitControls( camera );
-		camera.position.set( 10, 10, 10 );
-		camera.up = new THREE.Vector3( 0, 1, 0 );
-		camera.lookAt(new THREE.Vector3( 0, 0, 0 ));
-		controls.update( );
+		// Renderer
+		var renderer = new THREE.WebGLRenderer();
+		renderer.setClearColor(0x101010);
+		renderer.setPixelRatio(window.devicePixelRatio);
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		document.body.appendChild(renderer.domElement);
 		
-		var renderer = new THREE.WebGLRenderer( );
-		renderer.setClearColor( 0xFFFFFF );
-		renderer.setPixelRatio( window.devicePixelRatio );
-		renderer.setSize( window.innerWidth, window.innerHeight );
-		document.body.appendChild( renderer.domElement );
+		//Lighting
+		var ambientLight = new THREE.AmbientLight(0xFFFFFF, 1.0);
+		scene.add(ambientLight);
+		var pointLight = new THREE.PointLight(0xFFFFFF, 0.5);
+		pointLight.position.set(0, 20, 20);
+		scene.add(pointLight);
 		
-		window.addEventListener( 'resize', function( ) {
-			var width = window.innerWidth;
-			var height = window.innerHeight;
-			renderer.setSize( width, height );
-			camera.aspect = width / height;
-			camera.updateProjectionMatrix();
-		} );
-		
-		var ambientLight = new THREE.AmbientLight( 0xFFFFFF, 1.0 );
-		scene.add( ambientLight );
-		
-		var pointLight = new THREE.PointLight( 0xFFFFFF, 0.5 );
-		pointLight.position.set( 0, 20, 20 );
-		scene.add( pointLight );
-		
-		function render( ) {
-			requestAnimationFrame( render );
-			renderer.render( scene, camera );
+		// Render
+		function render(){
+			requestAnimationFrame(render);
+			renderer.render(scene, camera);
 		}
-		render( );
-		// ------------------------------------------------------------ End Scene ------------------------------------------------------------
-		
+		render();
+		// ------------------------------------------------------------ End Setup ------------------------------------------------------------
 		// ------------------------------------------------------------ Objects ------------------------------------------------------------
+		var cubieSize = 1;
+		colors = {
+			'white':0xFFFFFF, 'yellow':0xFFFF00, 'red':0xFF0000, 'orange':0xFF7000, 
+			'blue':0x0000FF, 'green':0x00FF00, 'gray':0x505050
+		};
+		colorScheme = ['red', 'orange', 'yellow', 'white', 'blue', 'green'];
 		
-		var cubieSize = .95;
-		colors = { 'white':0xFFFFFF, 'yellow':0xFFFF00, 'red':0xFF0000, 'orange':0xFFA500, 
-				  'blue':0x0000FF, 'green':0x00FF00, 'gray':0x505050 };
-		colorScheme = [ 'red', 'orange', 'yellow', 'white', 'blue', 'green' ];
+		// cubieKeys is only created to help generate cubieDict
+		var cubieKeys = [	
+			'LUF', 'UF', 'RUF', 'LU', 'U', 'RU', 'LUB', 'UB', 'RUB',
+			'LF', 'F', 'RF', 'L', 'C', 'R', 'LB', 'B', 'RB', 
+			'LDF', 'DF', 'RDF', 'LD', 'D', 'RD', 'LDB', 'DB', 'RDB' 
+		];
 		
-		var keys = [
-						'LUF', 'UF', 'RUF', 'LU', 'U', 'RU', 'LUB', 'UB', 'RUB',
-						'LF', 'F', 'RF', 'L', 'C', 'R', 'LB', 'B', 'RB', 
-						'LDF', 'DF', 'RDF', 'LD', 'D', 'RD', 'LDB', 'DB', 'RDB' ]
+		var geometries = [];	// Create a geometry for each cubie so that they can be colored separately.
+		for (var i = 0; i < 27; i++){
+			geometries.push(new THREE.CubeGeometry(cubieSize, cubieSize, cubieSize));
+		}		
+		for (var i = 0; i < 27; i++){    // Color the 27 cubies.
+			color(geometries[i], getCubieFaceColors(getCubieColorScheme(cubieKeys[i], colorScheme, colors), colors));
+		}			
+		var material = new THREE.MeshLambertMaterial({
+			color: 0xffffff,
+			vertexColors: THREE.FaceColors,
+			polygonOffset: true,
+			polygonOffsetFactor: 1, // positive value pushes polygon further away
+			polygonOffsetUnits: 1
+		});
 		
-		function getCubieColorScheme( key ) {
-			var colorscheme = this.colorScheme
-			var cubieColorScheme = [ 'gray', 'gray', 'gray', 'gray', 'gray', 'gray' ];  // Default face color is gray until properly computed.
-			var faces = [ 'R', 'L', 'U', 'D', 'F', 'B' ];
-			if ( key == 'C' ) {
-				return cubieColorScheme;  // Center cubie is the only default colored cubie.
+		function addEdges(mesh) { 	// SOURCE: https://stackoverflow.com/questions/31539130/display-wireframe-and-solid-color
+			var geometry = new THREE.EdgesGeometry(mesh.geometry); // or WireframeGeometry
+			var material = new THREE.LineBasicMaterial({color: 0x000000, linewidth: 2});
+			var edges = new THREE.LineSegments(geometry, material);
+			mesh.add(edges);	
+		}
+		
+		var cubieDict = {};
+		for (var i = 0; i < 27; i++){
+			cubieDict[cubieKeys[i]] = new THREE.Mesh(geometries[i], material);
+		}
+		
+		var cubies = [];	// Create 27 cubies.
+		for (var i = 0; i < 27; i++){
+			cubies.push(new THREE.Mesh(geometries[i], material));
+		}
+
+		function getCubieColorScheme(key){
+			var colorscheme = this.colorScheme;
+			var cubieColorScheme = ['gray', 'gray', 'gray', 'gray', 'gray', 'gray'];  // Default face color is gray until properly computed.
+			var faces = ['R', 'L', 'U', 'D', 'F', 'B'];
+			if (key == 'C'){
+				return cubieColorScheme;	// Center cubie is the only default colored cubie.
 			}
-			var keyArr = key.split( "" );
-			for ( index in keyArr ) {
-				colorIndex = faces.indexOf( keyArr[ index ] )	// faces.indexOf( < letter in key in from keys > )
-				cubieColorScheme[ colorIndex ] = colorScheme[ colorIndex ];
+			var keyArr = key.split("");    // Separate letters of key to be iterated over.
+			for (index in keyArr){    // Color the face corresponding to the key with the color corresponding to the key.
+				colorIndex = faces.indexOf(keyArr[index]);
+				cubieColorScheme[colorIndex] = colorScheme[colorIndex];
 			}
 			return cubieColorScheme;
 		}
 		
-		function getCubieFaceColors( cubieColorScheme ) {
+		function getCubieFaceColors(cubieColorScheme){
 			var colors = this.colors;
-			var cubieFaceColors = [ ];
-			for ( var i = 0; i < 12; i++ ) { 	// Each square face is two triangles, so 12 primitives to color.
-				cubieFaceColors.push( colors[ cubieColorScheme[ Math.floor( i / 2 ) ] ] );
+			var cubieFaceColors = [];
+			for (var i = 0; i < 12; i++){ 	// Each square face is two triangles, so 12 primitives to color.
+				cubieFaceColors.push(colors[cubieColorScheme[Math.floor(i / 2)]]);
 			}
 			return cubieFaceColors;
 		}
 		
-		function color(geometry, faceColors) {
-			for ( var i = 0; i < 12; i ++ ) {    // 12 faces because each square is two triangles.
-				geometry.faces[ i ].color.setHex( faceColors[i] );
+		function color(geometry, faceColors){
+			for (var i = 0; i < 12; i++){ 		// 12 faces because each square is two triangles.
+				geometry.faces[i].color.setHex(faceColors[i]);
 			}
-		}
-		
-		var geometries = []		// Create a geometry for each cubie so that they can be colored separately.
-		
-		for ( var i = 0; i < 27; i++ ) {
-			geometries.push( new THREE.CubeGeometry( cubieSize, cubieSize, cubieSize ) );
-		}		
-		
-		for ( var i = 0; i < 27; i++ ) {    // Color the 27 cubies.
-			color( geometries[ i ], getCubieFaceColors( getCubieColorScheme( keys[ i ], colorScheme, colors ), colors ) );
-		}			
-		
-		var material = new THREE.MeshPhongMaterial( {
-		color: 0xffffff,
-		vertexColors: THREE.FaceColors,
-		polygonOffset: true,
-		polygonOffsetFactor: 1, // positive value pushes polygon further away
-		polygonOffsetUnits: 1
-		} );
-		
-		
-		function addEdges( mesh ) { 	// SOURCE: https://stackoverflow.com/questions/31539130/display-wireframe-and-solid-color
-			var geometry = new THREE.EdgesGeometry( mesh.geometry ); // or WireframeGeometry
-			var material = new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 2 } );
-			var edges = new THREE.LineSegments( geometry, material );
-			mesh.add( edges );	
-		}
-		
-		var cubies = [];		// Create 27 cubies.
-		for ( var i = 0; i < 27; i++ ) {
-			cubies.push( new THREE.Mesh( geometries[ i ], material ) );
 		}
 		
 		// Add black edges to cubies to make them more distinguishable.
 		// Position the cubies left-to-right, front-to-back, top-to-bottom.
 		// Add each cubie  to the scene after its edges and position are computed.
 		for (var i = 0; i < 27; i++) {		
-			addEdges( cubies[ i ] );
-			cubies[ i ].position.set( -1 + i%3 , 1 - Math.floor(i/9), 1 - Math.floor(i/3)%3 );
-			scene.add( cubies[ i ] );
-			//cubies[i].matrixAutoUpdate = false;
+			addEdges(cubies[i]);
+			cubies[i].position.set(-1 + i%3 , 1 - Math.floor(i/9), 1 - Math.floor(i/3)%3);
+			scene.add(cubies[i]);
 		}
-		
 		// ------------------------------------------------------------ End Objects ------------------------------------------------------------
-		
-		// ------------------------------------------------------------ Start Transformations ------------------------------------------------------------
-		
+		// ------------------------------------------------------------ Animation ------------------------------------------------------------
 		var steps = 20;
-		var theta = Math.PI / ( 2 * steps );
+		var theta = Math.PI / (2 * steps);
 		var rotationMatrices = {
-			'R':new THREE.Matrix4().makeRotationX( -1*theta ) , 'L':new THREE.Matrix4().makeRotationX( theta ) ,
-			'U':new THREE.Matrix4().makeRotationY( -1*theta ) , 'D':new THREE.Matrix4().makeRotationY( theta ) ,
-			'F':new THREE.Matrix4().makeRotationZ( -1*theta ) , 'B':new THREE.Matrix4().makeRotationZ( theta )
+			'R':new THREE.Matrix4().makeRotationX(-1*theta), 'L':new THREE.Matrix4().makeRotationX(theta),
+			'U':new THREE.Matrix4().makeRotationY(-1*theta), 'D':new THREE.Matrix4().makeRotationY(theta),
+			'F':new THREE.Matrix4().makeRotationZ(-1*theta) , 'B':new THREE.Matrix4().makeRotationZ(theta)
 		};
 		var inverseRotationMatrices = {
-			'R':new THREE.Matrix4().makeRotationX( theta ) , 'L':new THREE.Matrix4().makeRotationX( -1*theta ) ,
-			'U':new THREE.Matrix4().makeRotationY( theta ) , 'D':new THREE.Matrix4().makeRotationY( -1*theta ) ,
-			'F':new THREE.Matrix4().makeRotationZ( theta ) , 'B':new THREE.Matrix4().makeRotationZ( -1*theta )
-		}
-		//var allowed = {'value':true};
-		function turnSlice( slice, inverse/*, allowed */) {
-		//	if (allowed.value) {
-			//	allowed.value = false;
-				var step = 0;
-				var sliceCubies = [ ]; 
-				var dict = { 'R':['x',1], 'L':['x',-1], 'U':['y',1], 'D':['y',-1], 'F':['z',1], 'B':['z',-1] }; // Eace slice is determined by the value of the relevant coordinate
-				var rotationMatrix = inverse ? inverseRotationMatrices[slice] : rotationMatrices[slice];
+			'R':new THREE.Matrix4().makeRotationX(theta), 'L':new THREE.Matrix4().makeRotationX(-1*theta),
+			'U':new THREE.Matrix4().makeRotationY(theta), 'D':new THREE.Matrix4().makeRotationY(-1*theta),
+			'F':new THREE.Matrix4().makeRotationZ(theta) , 'B':new THREE.Matrix4().makeRotationZ(-1*theta)
+		};
+		
+		function turnSlice(slice, inverse){
+			var steps = this.steps;
+			var step = 0;
+			var cubies = this.cubies;
+			var sliceCubies = []; 
+			var dict = {'R':['x',1], 'L':['x',-1], 'U':['y',1], 'D':['y',-1], 'F':['z',1], 'B':['z',-1]}; // Eace slice is determined by the value of the relevant coordinate
+			var rotationMatrix;
+			if (inverse){
+				rotationMatrix = this.inverseRotationMatrices[slice];
+			}
+			else{
+				rotationMatrix = this.rotationMatrices[slice];
+			}
 
-				for ( var i = 0 ; i < 27 ; i++ ) {		// Get slice
-					// if relevant coordinate equals corresponding value in dict
-					if ( cubies[ i ].position[ dict[ slice ][0] ] ==  dict[ slice ][1] ) { 
-						sliceCubies.push( cubies[ i ] );
-					} // end if
-				} // end for loop
+			for (var i = 0 ; i < 27 ; i++){		// Get slice
+				// if relevant coordinate equals corresponding value in dict
+				if ( cubies[i].position[dict[slice][0]] == dict[slice][1]){ 
+					sliceCubies.push(cubies[i]);
+				} // end if
+			} // end for loop
 
-				var animate = function( ){
-					if (step < steps){ 
-						for (var i = 0; i < 9; i++){
-							sliceCubies[i].applyMatrix(rotationMatrix);
-						}
-						step++
-						requestAnimationFrame( animate );
+			var animate = function(){
+				if (step < steps){ 
+					for (var i = 0; i < 9; i++){
+						sliceCubies[i].applyMatrix(rotationMatrix);
 					}
-					if (step == steps){
-						for ( var i = 0 ; i < 9 ; i++ ){
-							// Clean up orientation
-							let elements = sliceCubies[i].matrix.elements;
-							for (var j = 0 ; j < 16; j++){
-								elements[j] = (Math.round(elements[j]));
-							}
+					step++
+					requestAnimationFrame(animate);
+				}	// end if
+				if (step == steps){
+					for (var i = 0 ; i < 9 ; i++){
+						// Clean up orientation
+						let elements = sliceCubies[i].matrix.elements;
+						for (var j = 0 ; j < 16; j++){
+							elements[j] = (Math.round(elements[j]));
+						}
 
-							sliceCubies[i].matrix.set(		// Perhaps a more elegant way to set these values?
-											elements[0], elements[1], elements[2], elements[3],
-											elements[4], elements[5], elements[6], elements[7],
-											elements[8], elements[9], elements[10], elements[11],
-											elements[12], elements[13], elements[14], elements[15]
-							);
-							// Clean up position
-							sliceCubies[ i ].position.x = Math.round(sliceCubies[ i ].position.x);
-							sliceCubies[ i ].position.y = Math.round(sliceCubies[ i ].position.y);
-							sliceCubies[ i ].position.z = Math.round(sliceCubies[ i ].position.z);
-						}	// end for loop
-						requestAnimationFrame(function(){/*setTimeout(allowed.value = true, 300)*/});
-					}	// end if
-				};	// end animate definition
-				requestAnimationFrame( animate );
-			//}
+						sliceCubies[i].matrix.set(		// Perhaps a more elegant way to set these values?
+							elements[0], elements[1], elements[2], elements[3],
+							elements[4], elements[5], elements[6], elements[7],
+							elements[8], elements[9], elements[10], elements[11],
+							elements[12], elements[13], elements[14], elements[15]
+						);
+						// Clean up position
+						sliceCubies[i].position.x = Math.round(sliceCubies[i].position.x);
+						sliceCubies[i].position.y = Math.round(sliceCubies[i].position.y);
+						sliceCubies[i].position.z = Math.round(sliceCubies[i].position.z);
+
+					}	// end for loop
+					requestAnimationFrame(function(){});
+				}	// end if
+			};	// end animate definition
+			animate();
 		}	// end turnSlice definition
+		// ------------------------------------------------------------ End Animation ------------------------------------------------------------
+
+		// ------------------------------------------------------------Event Listeners ------------------------------------------------------------
+		window.addEventListener('resize', function(){
+			var width = window.innerWidth;
+			var height = window.innerHeight;
+			renderer.setSize(width, height);
+			camera.aspect = width / height;
+			camera.updateProjectionMatrix();
+		});
 		
-		function wait(ms) {
-			var start = new Date().getTime();
-			var end = start;
-			while (end < start + ms) {
-				end = new Date().getTime();
-			}
-		}
-		
-		function handleKeyDown(e){
+		function handleKeyPress(e){
 			if (e.key == 'r' || e.key == 'l' || e.key == 'u' || e.key == 'd' || e.key == 'f' || e.key == 'b'){
-				turnSlice(e.key.toUpperCase(), false/*, allowed*/);
-			}
-			if (e.key == 'R' || e.key == 'L' || e.key == 'U' || e.key == 'D' || e.key == 'F' || e.key == 'B'){
-				turnSlice(e.key, true, allowed);
-			}	
-			if (e.key == 'o'){
-				
+				turnSlice(e.key.toUpperCase(), false);
 			}
 		}
-		window.addEventListener('keydown', handleKeyDown, false);
-		
-		
-	
-		// ------------------------------------------------------------ End Transformations ------------------------------------------------------------
-		
-		//------------------------------------------------------------ Animate ------------------------------------------------------------
-
-
-		
-		// ------------------------------------------------------------ End Animate ------------------------------------------------------------
+		window.addEventListener('keydown', handleKeyPress, false);
+		// ------------------------------------------------------------ End Event Listeners ------------------------------------------------------------
 	</script>
 </body>
 </html>
