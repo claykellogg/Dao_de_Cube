@@ -161,6 +161,11 @@
 			}
 			return -1;
 		}
+		
+		function oppositeColor(color){
+			let side = indexOfValue(color, colorScheme);
+			return colorScheme[opposite[side]];
+		}
 		// ------------------------------------------------------------ End Objects ------------------------------------------------------------
 		
 		// ------------------------------------------------------------ Start Transformations ------------------------------------------------------------
@@ -359,7 +364,6 @@
 		
 		function currentPosition(key){
 			var position = cubies[keys.indexOf(key)].position;
-			var position = cubies[keys.indexOf(key)].position;
 			var keyposition = [];
 			x = position.x;
 			y = position.y;
@@ -413,7 +417,7 @@
 		}
 		
 		var opposite = {'R':'L', 'L':'R', 'U':'D', 'D':'U', 'F':'B', 'B':'F'};
-		var moveSlice = {		// All of this is hardcoded to make my life easy later.
+		var moveSlice = {	// All of this is hardcoded to make my life easy later.
 			"R":{"U":{"U":"","F":"R'","B":"R","D":"R2"},"F":{"F":"","U":"R","B":"R2","D":"R'"},"B":{"B":"","D":"R","U":"R'","F":"R2"},"D":{"D":"","U":"R2","F":"R","B":"R'"}},
 			"L":{"U":{"U":"","F":"L","B":"L'","D":"L2"},"F":{"F":"","U":"L'","B":"L2","D":"L"},"B":{"B":"","D":"L'","U":"L","F":"L2"},"D":{"D":"","U":"L2","F":"L'","B":"L"}},
 			"U":{"R":{"R":"","L":"U2","F":"U","B":"U'"},"L":{"R":"U2","L":"","F":"U'","B":"U"},"F":{"R":"U'","L":"U","F":"","B":"U2"},"B":{"R":"U","L":"U'","F":"U2","B":""}},
@@ -505,7 +509,7 @@
 			function pickLLcase(){
 				let countTLEO = 0;
 				for (let i = 0; i < 4; i++){
-					if (currentOrientation(tle[i]).U == "yellow"){
+					if (currentOrientation(tle[i]).U == colorScheme.U){
 						orientedTLE.push(tle[i]);
 						countTLEO++;
 					}
@@ -514,16 +518,64 @@
 					return "TLEO1";
 				}
 				if (countTLEO == 2){
-					if (replaceCharacter(orientedTLE[0],"U","") !== opposite[replaceCharacter(orientedTLE[0],"U","")]){
+					if (replaceCharacter(currentPosition(orientedTLE[0]),"U","") !== opposite[replaceCharacter(currentPosition(orientedTLE[1]),"U","")]){
 						return "TLEO2";
 					}else{
-						//return "TLEO3";
+						return "TLEO3";
 					}
+				}
+				
+				let countTLCO = 0;
+				for (let i = 0; i < 4; i++){
+					if (currentOrientation(tlc[i]).U !== colorScheme.U){
+						countTLCO++;
+					}
+				}
+				if (countTLCO !== 0){
+					return "TLCO";
+				}
+				
+				let goodCorners = 1;
+				let c1 = currentOrientation(keyAtPosition("LUF"));
+				let c2 = currentOrientation(keyAtPosition("RUF"));
+				let c3 = currentOrientation(keyAtPosition("RUB"));
+				let c4 = currentOrientation(keyAtPosition("LUB"));
+				if (c1.F == c2.F) goodCorners++;
+				if (c2.R == c3.R) goodCorners++;
+				if (goodCorners < 3){
+					return "TLCP";
+				}
+				
+				let goodEdges = 0;
+				let e1 = currentOrientation(keyAtPosition("UF"));
+				let e2 = currentOrientation(keyAtPosition("RU"));
+				let e3 = currentOrientation(keyAtPosition("UB"));
+				let e4 = currentOrientation(keyAtPosition("LU"));
+				if (e1.F == c1.F){
+					goodEdges++;
+				}
+				if (e2.R == c2.R){
+					goodEdges++;
+				}
+				if (e3.B == c3.B){
+					goodEdges++;
+				}
+				if (e4.L == c4.L){
+					goodEdges++;
+				}
+				if (goodEdges < 4){
+					return "TLEP";
+				}
+				if (goodEdges == 4){
+					return "FINAL";
 				}
 			}
 			
 			var solution = "";    // this will store the solution to the current step, not necessarily the full solution
 			var key = pickCubie();
+			//alert(key);
+			//printObject(currentOrientation(key));
+			//alert(currentPosition(key));
 			if (key !== -1){
 				var position = currentPosition(key);
 				var orientation = currentOrientation(key);
@@ -764,18 +816,119 @@
 					solution = solution + "FRUR'U'F'";
 				}
 				if (LLcase == "TLEO3"){
-					alert('hi');
-					/*
 					if (currentPosition(orientedTLE[0]) == "LU" || currentPosition(orientedTLE[0]) == "RU"){
 						solution = solution + "FRUR'U'F'";
 					}else{
-						//solution = solution + "UFRUR'U'F'";
+						solution = solution + "UFRUR'U'F'";
 					}
-					*/
+				}
+				if (LLcase == "TLCO"){
+					let uc = colorScheme.U;
+					let seq1 = "R'D'RDR'D'RD";
+					let seq2 = "R'D'RDR'D'RDR'D'RDR'D'RD";
+					let o1 = currentOrientation(keyAtPosition("RUF"));
+					let o2 = currentOrientation(keyAtPosition("RUB"));
+					let o3 = currentOrientation(keyAtPosition("LUB"));
+					let o4 = currentOrientation(keyAtPosition("LUF"));
+					if (o1.U == uc){
+						solution = solution + "U";
+					}else if (o1.R == uc){
+						
+						solution = solution + seq1 + "U";
+						
+					}else{
+						solution = solution + seq2 + "U";
+					}
+					if (o2.U == uc){
+						solution = solution + "U";
+					}else if (o2.B == uc){
+						solution = solution + seq1 + "U";
+					}else{
+						solution = solution + seq2 + "U";
+					}
+					if (o3.U == uc){
+						solution = solution + "U";
+					}else if (o3.L == uc){
+						solution = solution + seq1 + "U";
+					}else{
+						solution = solution + seq2 + "U";
+					}
+					if (o4.U == uc){
+						// done
+					}else if (o4.F == uc){
+						solution = solution + seq1;
+					}else{
+						solution = solution + seq2;
+					}
+				}
+				if (LLcase == "TLCP"){
+					let seq1 = "R' U R' U' R U2 R D R' U2 R D' R2 U R U' R";;
+					let o1 = currentOrientation(keyAtPosition("RUF"));
+					let o2 = currentOrientation(keyAtPosition("RUB"));
+					let o3 = currentOrientation(keyAtPosition("LUB"));
+					let o4 = currentOrientation(keyAtPosition("LUF"));
+					if (o1.F !== oppositeColor(o2.B) && o1.R !== oppositeColor(o2.L)){
+						solution = solution + seq1;
+					}else{
+						if (o1.F == o2.F){
+							solution = solution + "U2" + seq1;
+						}
+						if (o1.R == o2.R){
+							solution = solution + "U'" + seq1;
+						}
+						if (o2.B == o3.B){
+							solution = solution + seq1;
+						}
+						if (o3.L == o4.L){
+							solution = solution + "U" + seq1;
+						}
+					}
+				}
+				if (LLcase == "TLEP"){
+					let seq1 = "RU'RURURU'R'U'R2";
+					let seq2 = "L'UL'U'L'U'L'ULU(L')2";
+					let e1 = currentOrientation(keyAtPosition("UF"));
+					let e2 = currentOrientation(keyAtPosition("RU"));
+					let e3 = currentOrientation(keyAtPosition("UB"));
+					let e4 = currentOrientation(keyAtPosition("LU"));
+					let c1 = currentOrientation(keyAtPosition("LUF"));
+					let c2 = currentOrientation(keyAtPosition("RUF"));
+					let c3 = currentOrientation(keyAtPosition("RUB"));
+					let c4 = currentOrientation(keyAtPosition("LUB"));
+					let goodEdges = 0;
+					let goodEdge = "";
+					if (e1.F == c1.F){
+						goodEdges++;
+						goodEdge = "UF";
+					}
+					if (e2.R == c2.R){
+						goodEdges++;
+						goodEdge = "RU";
+					}
+					if (e3.B == c3.B){
+						goodEdges++;
+						goodEdge = "UB";
+					}
+					if (e4.L == c4.L){
+						goodEdges++;
+						goodEdge = "LU";
+					}
+					
+					if (goodEdges == 0){
+						solution = solution + seq1;
+					}else if (goodEdges == 1){
+						solution = solution + movePiece("U",goodEdge,"UB") + seq1;
+					}
+				}
+				if (LLcase == "FINAL"){
+					solution = solution + movePiece("U","UF",keyAtPosition("UF"));
 				}
 			}
+			//alert(solution);
 			beginSequence(solution);
 		}
+		
+		var promise = navigator.mediaDevices.getUserMedia({audio:false,video:true});
 		
 		function handleKeyDown(e){
 			if (e.key=='r'||e.key=='l'||e.key=='u'||e.key=='d'||e.key=='f'||e.key=='b'||e.key=='m'||e.key=='e'||e.key=='s'||e.key=='x'||e.key=='y'||e.key=='z'){
@@ -786,14 +939,15 @@
 			}	
 			if (e.key == 'o'){
 				//alert(currentPosition("RUF"));
-				//printObject(keys);
+				alert(keys);
 				//alert(cubieSolved("RUF"));
+				//beginSequence("RU'RURURU'R'U'R2");
 
 			}
 			if (e.key == 'p'){
 				//beginSequence("RUR'U2RU'R'U2RU'R'L'ULUFU'F'");
 				//beginSequence("L'U'LU2L'ULU2L'ULRU'R'U'F'UF");
-				beginSequence("D2  B'  U2  D'  R2  B  F  L  R'  F2  R  D2  U2  B'  R'  B'  U  L2  B  L'  F  L2  B2  R  B'");
+				beginSequence("B'  L2  D2  R2  F2  R  D'  U  F  U'  R  U2  F2  L'  U'  F'  D'  L  B2  U2  B'  U  B'  L2  F2");
 			}
 			if (e.key == 'k'){
 				beginnerMethod();
@@ -801,7 +955,6 @@
 			
 		}
 		window.addEventListener('keydown', handleKeyDown, false);
-		
 		
 	
 		// ------------------------------------------------------------ End Transformations ------------------------------------------------------------
