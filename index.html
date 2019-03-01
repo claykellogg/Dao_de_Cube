@@ -55,12 +55,12 @@
 		// ------------------------------------------------------------ Objects ------------------------------------------------------------
 		
 		var cubieSize = 1;
-		colors = { 
+		var colors = { 
 			'white':0xFFFFFF, 'yellow':0xFFFF00, 'red':0xFF0000, 'orange':0xFFA000, 
 			'blue':0x0000FF, 'green':0x00FF00, 'gray':0x505050
 		};
-		colorScheme = { 'R':'red', 'L':'orange', 'U':'yellow', 'D':'white', 'F':'blue', 'B':'green' };
-		
+		var colorScheme = { 'R':'red', 'L':'orange', 'U':'yellow', 'D':'white', 'F':'blue', 'B':'green' };
+		var opposite = {'R':'L', 'L':'R', 'U':'D', 'D':'U', 'F':'B', 'B':'F'};
 		var keys = [
 			'LUF', 'UF', 'RUF', 'LU', 'U', 'RU', 'LUB', 'UB', 'RUB',
 			'LF', 'F', 'RF', 'L', 'C', 'R', 'LB', 'B', 'RB', 
@@ -159,8 +159,8 @@
 					return index;
 				}
 			}
+			return -1;
 		}
-		
 		// ------------------------------------------------------------ End Objects ------------------------------------------------------------
 		
 		// ------------------------------------------------------------ Start Transformations ------------------------------------------------------------
@@ -172,17 +172,21 @@
 
 		function computeOrientation(orientation, slice, inverse){
 			var clone = cloneObject(orientation);
-			var dict = {'R':'FUBD', 'L':'DBUF', 'U':'RFLB', 'D':'BLFR', 'F':'RDLU', 'B':'ULDR', 'M':'FDBU', 'E':'FRBL', 'S':'RDLU', 'X':'FDBU', 'Y':'FRBL', 'Z':'ULDR'};
+			var dict = {'R':'DBUF', 'L':'FUBD', 'U':'BLFR', 'D':'RFLB', 'F':'ULDR', 'B':'RDLU', 'M':'FDBU', 'E':'FRBL', 'S':'RDLU', 'X':'FDBU', 'Y':'FRBL', 'Z':'ULDR'};
 			var cycle = inverse ? dict[slice].split("").reverse().join("") : dict[slice];    // for example (R not inverse), cycle = 'FUBD'
-			var cycled = cycle.substring(3,4) + cycle.substring(0,3);    // then, cycled = 'DFUB'
-			var lastColor = clone[cycled[0]];    // store D color
-			for (var i = 3; i > 0; i--){    // D gets B color, B gets U color, U gets F color
-				clone[cycle[i]] = clone[cycled[i]];
+			for (var i = 0; i < 4; i++){    // D gets B color, B gets U color, U gets F color
+				clone[cycle[i]] = orientation[cycle[(i+1)%4]];
 			}
-			clone[cycle[0]] = lastColor;    // F gets D color
 			return clone;
 		}
+		function computeOrientationGeneral(orientation,move){
+			if (move.length == 0) return orientation;
+			if (move.length == 1) return computeOrientation(orientation,move,false);
+			if (move[1] == "'") return computeOrientation(orientation,move[0],true);
+			if (move[1] == "2") return computeOrientation(computeOrientation(orientation,move[0],false),move[0],false);
+		}
 		function replaceCharacter(word, oldCharacter, newCharacter){
+			if (word.indexOf(oldCharacter) == -1) return word;
 			word = word.split("");
 			index = word.indexOf(oldCharacter);
 			word.splice(index,1,newCharacter);
@@ -190,30 +194,46 @@
 			return word;
 		}
 		
-		var keyPermutations = {    // X,Y,Z hardcoded, X',Y',Z' computed from those using Python
-			"X":[6,7,8,15,16,17,24,25,26, 3,4,5,12,13,14,21,22,23, 0,1,2,9,10,11,18,19,20],
-			"X'":[18,19,20,9,10,11,0,1,2, 21,22,23,12,13,14,3,4,5, 24,25,26,15,16,17,6,7,8],
+		var keyPermutations = {		// X,Y,Z hardcoded, X',Y',Z' computed from those using Python
+			"X":[6,7,8,15,16,17,24,25,26,3,4,5,12,13,14,21,22,23,0,1,2,9,10,11,18,19,20],
+			"X'":[18,19,20,9,10,11,0,1,2,21,22,23,12,13,14,3,4,5,24,25,26,15,16,17,6,7,8],
 			"Y":[6,3,0,7,4,1,8,5,2, 15,12,9,16,13,10,17,14,11, 24,21,18,25,22,19,26,23,20],
-			"Y'":[2, 5, 8, 1, 4, 7, 0, 3, 6, 11, 14, 17, 10, 13, 16, 9, 12, 15, 20, 23, 26, 19, 22, 25, 18, 21, 24],
-			"Z":[2,11,20,5,14,23,8,17,26, 1,10,19,4,13,22,7,16,25, 0,9,18,3,12,21,6,15,24],
-			"Z'":[18, 9, 0, 21, 12, 3, 24, 15, 6, 19, 10, 1, 22, 13, 4, 25, 16, 7, 20, 11, 2, 23, 14, 5, 26, 17, 8]
+			"Y'":[2,5,8,1,4,7,0,3,6,11,14,17,10,13,16,9,12,15,20,23,26,19,22,25,18,21,24],
+			"Z":[2,11,20,5,14,23,8,17,26,1,10,19,4,13,22,7,16,25,0,9,18,3,12,21,6,15,24],
+			"Z'":[18,9,0,21,12,3,24,15,6,19,10,1,22,13,4,25,16,7,20,11,2,23,14,5,26,17,8]
 		}
 		
 		function updateKeys(move, inverse){
 			let dict = {'X':'FDBU', 'Y':'FRBL', 'Z':'ULDR'};
-			let cycle = inverse ? dict[move].reverse() : dict[move];
+			let cycle = inverse ? dict[move].split("").reverse().join("") : dict[move];
 			if (inverse) move = move + "'";
-			perm = keyPermutations[move];
-			newKeys = Array(27).fill("");
+			let perm = keyPermutations[move];
+			let newKeys = Array(27).fill("");
+			//let newOrientations = Array(27);
 			for (let i = 0; i < 27; i++){
 				newKeys[i] = keys[perm[i]];
+				//newOrientations[i] = orientations[perm[i]];
 			}
 			keys = newKeys;
+			//orientations = newOrientations;
 			let newColorScheme = colorScheme;
-			for (let i = 0; i < 4; i++){
+			let firstColor = colorScheme[cycle[0]];
+			for (let i = 0; i < 3; i++){
 				newColorScheme[cycle[i]] = colorScheme[cycle[(i+1)%4]];
 			}
+			newColorScheme[cycle[3]] = firstColor;
 			colorScheme = newColorScheme;
+		}
+		function updateKeysGeneral(move){
+			if (move.length == 0){
+				// pass
+			}else if (move.length == 1){
+				updateKeys(move[0],false);
+			}else if (move[1] == "'"){
+				updateKeys(move[0],true);
+			}else if (move[1] == "2"){
+				updateKeys(updateKeys(move[0],false),move[0],false);
+			}
 		}
 
 		var steps = 20;
@@ -352,17 +372,13 @@
 			if (z == -1) keyposition.push("B");
 			return keyposition.join("");
 		}
-		function correctPosition(key) {
+		
+		function correctPosition(key){
 			return (key == currentPosition(key));
-			/*
-			var correct = new THREE.Vector3();
-			for (var i = 0; i < key.length; i++){
-				correct.add(cubies[keys.indexOf(key[i])].position);
-			}
-			return correct.equals(cubies[keys.indexOf(key)].position)
-			*/
 		}
-			
+		function currentOrientation(key){
+			return orientations[keys.indexOf(key)];
+		}
 		function correctOrientation(key){
 			var correct = true;
 			var orientation = orientations[keys.indexOf(key)];
@@ -381,6 +397,14 @@
 		function cubieSolved(key){
 			return correctOrientation(key);
 		}
+		function keyAtPosition(position){
+			for (let i = 0; i < 27; i++){
+				key = keys[i];
+				if (currentPosition(key) == position){
+					return key;
+				}
+			}
+		}
 		function inverse(turn){
 			if (turn == "") return turn;
 			if (turn.length == 1) return turn + "'";
@@ -389,16 +413,17 @@
 		}
 		
 		var opposite = {'R':'L', 'L':'R', 'U':'D', 'D':'U', 'F':'B', 'B':'F'};
-		var moveSlice = {	// All of this is hardcoded to make my life easy later.
+		var moveSlice = {		// All of this is hardcoded to make my life easy later.
 			"R":{"U":{"U":"","F":"R'","B":"R","D":"R2"},"F":{"F":"","U":"R","B":"R2","D":"R'"},"B":{"B":"","D":"R","U":"R'","F":"R2"},"D":{"D":"","U":"R2","F":"R","B":"R'"}},
 			"L":{"U":{"U":"","F":"L","B":"L'","D":"L2"},"F":{"F":"","U":"L'","B":"L2","D":"L"},"B":{"B":"","D":"L'","U":"L","F":"L2"},"D":{"D":"","U":"L2","F":"L'","B":"L"}},
 			"U":{"R":{"R":"","L":"U2","F":"U","B":"U'"},"L":{"R":"U2","L":"","F":"U'","B":"U"},"F":{"R":"U'","L":"U","F":"","B":"U2"},"B":{"R":"U","L":"U'","F":"U2","B":""}},
 			"D":{"R":{"R":"","L":"D2","F":"D'","B":"D"},"L":{"R":"D2","L":"","F":"D","B":"D'"},"F":{"R":"D","L":"D'","F":"","B":"D2"},"B":{"R":"D'","L":"D","F":"D2","B":""}},
 			"F":{"R":{"R":"","L":"F2","U":"F'","D":"F"},"L":{"L":"","R":"F2","U":"F","D":"F'"},"U":{"U":"","D":"F2","R":"F","L":"F'"},"D":{"D":"","U":"F2","R":"F'","L":"F"}},
-			"B":{"R":{"R":"","L":"B2","U":"B","D":"B'"},"L":{"L":"","R":"B2","U":"B'","D":"B"},"U":{"U":"","D":"B2","R":"B'","L":"B"},"D":{"D":"","U":"B2","R":"B","L":"B'"}}
+			"B":{"R":{"R":"","L":"B2","U":"B","D":"B'"},"L":{"L":"","R":"B2","U":"B'","D":"B"},"U":{"U":"","D":"B2","R":"B'","L":"B"},"D":{"D":"","U":"B2","R":"B","L":"B'"}},
+			"Y":{"R":{"R":"","F":"Y","L":"Y2","B":"Y'"},"L":{"L":"","B":"Y","R":"Y2","F":"Y'"},"F":{"F":"","L":"Y","B":"Y2","R":"Y'"},"B":{"B":"","R":"Y","F":"Y2","L":"Y2"}}
 		}
+		
 		function movePiece(slice, from, to){
-			// Returns same move info as moveSlice, but can work on positional keys directly
 			if (from.length !== to.length) return "";
 			from = from.split("");
 			to = to.split("");
@@ -406,7 +431,8 @@
 			to.splice(to.indexOf(slice),1);
 			if (from.length == 1){
 				return moveSlice[slice][from[0]][to[0]];
-			}else{
+			}
+			else{
 				var from1 = from[0];
 				var from2 = from[1];
 				var to1 = to[0];
@@ -417,19 +443,26 @@
 		var moveCube = {
 			"Y":{"R":{"R":"","F":"Y","L":"Y2","B":"Y'"},"L":{"L":"","B":"Y","R":"Y2","F":"Y'"},"F":{"F":"","L":"Y","B":"Y2","R":"Y'"},"B":{"B":"","R":"Y","F":"Y2","L":"Y2"}}
 		}
-		function doMove(move){
-			beginSequence(move);
-			if (move.length == 1){
-				setTimeout(function(){},waitTime+50);
+		function shiftRight(string, n){
+			while (n !== 0){
+				let c = string[string.length - 1];
+			    string = c + replaceCharacter(string,c,"");
+				n--
 			}
-			if (move.length == 2){
-				if (move[1] == "'"){
-					setTimeout(function(){},waitTime+50);
-				}
-				if (move[1] == ["2"]){
-					setTimeout(function(){},2*waitTime+50);
-				}
-			}
+			return string
+		}
+	
+		function combine(m1,m2,face){ 
+			// m1 and m2 are two rotations of the same face
+			// returns modified m2
+			let dict = {};
+			dict[""] = 0;
+			dict[face] = 1;
+			dict[face+"2"] = 2;
+			dict[face+"'"] = 3;
+			m1 = dict[m1];
+			m2 = dict[m2];
+			return indexOfValue(shiftRight("0123",m1)[m2], dict);
 		}
 		
 		var fle = ['DF', 'LD', 'RD', 'DB'];
@@ -437,8 +470,7 @@
 		var sle = ['LF', 'RF', 'LB', 'RB'];
 		var tle = ['UF', 'LU', 'RU', 'UB'];
 		var tlc = ['LUF', 'RUF', 'LUB', 'RUB'];
-		var opposite = {'R':'L', 'L':'R', 'U':'D', 'D':'U', 'F':'B', 'B':'F'};
-				
+		
 		function beginnerMethod(){
 			var fleSolved = false;
 			var flcSolved= false;
@@ -449,7 +481,8 @@
 			var tlePermuted = false;
 			var unsolvedFLE = [];
 			var unsolvedFLC = [];
-
+			var orientedTLE = [];
+			
 			function pickCubie(){
 				for (let i = 0; i < 4; i++){ 
 					if (!cubieSolved(fle[i])){
@@ -461,78 +494,284 @@
 						return flc[i];
 					}
 				}
-					
-			}		
-			var solution = "";    // this will store the solution to the current step, not necessarily the full solution
-			var key = pickCubie();
-			var position = currentPosition(key);
-			var orientation = orientations[keys.indexOf(key)];
-			if (fle.indexOf(key) !== -1){    // if cubie is fle
-				let facing = indexOfValue(colorScheme.D, orientation);
-				if (position.indexOf("U") !== -1){    // if cubie is in third layer
-					let posMinusU = replaceCharacter(position,"U","");
-					alert(moveCube["Y"][posMinusU]["F"]);
-					doMove(moveCube["Y"][posMinusU]["F"]);
-					position = currentPosition(key);
-					orientation = orientations[keys.indexOf(key)];
-					doMove(movePiece("U",position,"LU"));
-					position = currentPosition(key);
-					orientation = orientations[keys.indexOf(key)];
-					if (facing == "U"){
-						doMove("F2");
+				for (let i = 0; i < 4; i++){ 
+					if (!cubieSolved(sle[i])){
+						return sle[i];
 					}
 				}
-				if (position.indexOf('U') == -1 && position.indexOf('D') == - 1){    // if cubie is in second layer
-					let slice = (position[0] == facing) ? position[1] : position[0];
-					let to = (key[0] === 'D') ? key[1] : key[0];
-					solution = solution + moveSlice["D"][to][slice] + moveSlice[slice][facing]["D"] + moveSlice["D"][slice][to];
+				return -1;
+			}	
+			
+			function pickLLcase(){
+				let countTLEO = 0;
+				for (let i = 0; i < 4; i++){
+					if (currentOrientation(tle[i]).U == "yellow"){
+						orientedTLE.push(tle[i]);
+						countTLEO++;
+					}
 				}
-				if (position.indexOf("D") !== -1){    // if cubie is in first layer
-					let from = (position[0] === "D") ? position[1] : position[0]; // Which vertical face is the cubie in?
-					let to = (key[0] === 'D') ? key[1] : key[0];    // Which vertical face does the cubie belong in?
-					let slice = (from == "R") ? "F" : "FLBR"["FLBR".indexOf(from) + 1];
-					if (facing == "U"){    // If cubie is vertically oriented
-						solution = solution + from + moveSlice["D"][to][from] + from + "'" + moveSlice["D"][from][to];
+				if (countTLEO == 0){
+					return "TLEO1";
+				}
+				if (countTLEO == 2){
+					if (replaceCharacter(orientedTLE[0],"U","") !== opposite[replaceCharacter(orientedTLE[0],"U","")]){
+						return "TLEO2";
 					}else{
-						solution = solution + from + moveSlice["D"][to][slice] + moveSlice[slice][from]["D"] + moveSlice["D"][slice][to];
+						//return "TLEO3";
 					}
 				}
 			}
-			if (flc.indexOf(key) !== -1){    // if cubie is flc
-				let facing = indexOfValue(colorScheme.D, orientation);
-				if (position.indexOf("U") !== -1){    // if cubie is in third layer
-					above = replaceCharacter(key,"D","U"); //RUF
-					solution = solution + movePiece("U",position,above);
-					if (solution.length == 1){
-						orientation = computeOrientation(orientation,"U",false);
+			
+			var solution = "";    // this will store the solution to the current step, not necessarily the full solution
+			var key = pickCubie();
+			if (key !== -1){
+				var position = currentPosition(key);
+				var orientation = currentOrientation(key);
+				if (fle.indexOf(key) !== -1){    // if cubie is fle
+					let facing = indexOfValue(colorScheme.D, orientation);
+					if (position.indexOf("U") !== -1){    // if cubie is in third layer
+						let keyMinusD = replaceCharacter(key,"D","");
+						let Ymove = moveCube["Y"][keyMinusD]["F"];
+						let YmoveU = replaceCharacter(Ymove,"Y","U");
+						let Umove = movePiece("U",position,"UF");
+						Umove = combine(YmoveU,Umove,"U");
+						solution = solution + Ymove + Umove;
+						if (facing == "U"){
+							solution = solution + "F2"
+						}else{
+							solution = solution + "U'R'FR";
+						}
 					}
-					if (solution.length == 2){
-						orientation = (solution[1] == "'") ? computeOrientation(orientation,"U",true) : computeOrientation(computeOrientation(orientation,"U",false),"U",false);
+					if (position.indexOf('U') == -1 && position.indexOf('D') == - 1){    // if cubie is in second layer
+						let keyMinusD = replaceCharacter(key,"D","");
+						let Ymove = moveCube["Y"][keyMinusD]["F"];
+						solution = solution + Ymove;
+						orientation = computeOrientationGeneral(orientation,Ymove);
+						facing = indexOfValue(colorScheme.D,orientation);
+						let cycle = ["RF","LF","LB","RB"];
+						if (Ymove.length == 1) position = cycle[(cycle.indexOf(position)+1)%4];
+						if (Ymove.length == 2){
+							if (Ymove[1] == "'"){
+								position = cycle[(cycle.indexOf(position)+3)%4];
+							}else{
+								position = cycle[(cycle.indexOf(position)+2)%4];
+							}
+						}
+						let slice1 = position[0];
+						let slice2 = position[1];
+						if (facing == slice1){
+							solution = solution + moveSlice[slice1][slice2]["F"] + moveSlice["F"][slice1]["D"] + moveSlice[slice1]["F"][slice2];
+						}else{
+							solution = solution + moveSlice["D"]["F"][slice1] + moveSlice[slice1][slice2]["D"] + moveSlice["D"][slice1]["F"];
+						}
 					}
-					facing = indexOfValue(colorScheme.D, orientation);
-					let minusU = replaceCharacter(above,"U",""); //RF
-					if (facing == "U"){    // if vertically oriented
-						let side1 = minusU[0]; //R
-						let side2 = minusU[1]; //F
-						let intermediate1 = replaceCharacter(replaceCharacter(above,above[0],opposite[above[0]]),above[2],opposite[above[2]]);
-						let intermediate2 = replaceCharacter(above,side2,opposite[side2]);
-						let m1 = moveSlice[side1][side2]["U"]; //R
-						let m2 = movePiece("U",intermediate1,intermediate2); //U
-						let m3 = inverse(m1); //R'
-						solution = solution + "U2" + m1 + m2 + m3 + m2 + m1 + inverse(m2) + m3;
+					if (position.indexOf("D") !== -1){    // if cubie is in first layer
+						let posMinusD = replaceCharacter(position,"D","");
+						solution = solution + posMinusD + "2";
+						if (facing == "D") facing = "U";
+						position = replaceCharacter(position,"D","U");
+						let keyMinusD = replaceCharacter(key,"D","");
+						let Ymove = moveCube["Y"][keyMinusD]["F"];
+						let YmoveU = replaceCharacter(Ymove,"Y","U");
+						let Umove = movePiece("U",position,"UF");
+						Umove = combine(YmoveU,Umove,"U");
+						solution = solution + Ymove + Umove;
+						if (facing == "U"){
+							solution = solution + "F2"
+						}else{
+							solution = solution + "U'R'FR";
+						}
 						
-					}else{
-						to = minusU[minusU.indexOf(facing)]; //F
-						from = minusU[1-minusU.indexOf(facing)]; //R
-						let m1 = moveSlice["U"][from][to]; //U
-						let m2 = moveSlice[from][facing]["U"]; //R
-						let m3 = moveSlice["U"][to][from]; //U'
-						let m4 = moveSlice[from]["U"][facing]; //R'
-						solution = solution + m1 + m2 + m3 + m4;
 					}
-				}else{ //cubie is in first layer
-					let m1 = moveSlice[position[0]][position[2]]["U"];
-					solution = solution + m1 + "U2" + inverse(m1);
+				}
+				if (flc.indexOf(key) !== -1){    // if cubie is flc
+					let facing = indexOfValue(colorScheme.D, orientation);
+					if (position.indexOf("U") !== -1){    // if cubie is in third layer
+						let Ymove = "";
+						if (key.indexOf("B") !== -1){    // if target location is in B slice
+							if (key.indexOf("R") !== -1){  // if target is in R slice
+								Ymove = "Y";	
+							}else{    // if target is in L slice
+								Ymove = "Y'";
+							}
+						}
+						solution = solution + Ymove;    // move target location to the front
+						let cycle = ["RUF","LUF","LUB","RUB"]; 
+						key = replaceCharacter(key,"D","U");
+						if (Ymove.length == 1){
+							position = cycle[(cycle.indexOf(position)+1)%4];
+							key = cycle[(cycle.indexOf(key)+1)%4];
+						}
+						if (Ymove.length == 2){
+							if (Ymove[1] == "'"){
+								position = cycle[(cycle.indexOf(position)+3)%4];
+								key = cycle[(cycle.indexOf(key)+3)%4];
+							}else{
+								position = cycle[(cycle.indexOf(position)+2)%4];
+								key = cycle[(cycle.indexOf(key)+2)%4];
+							}
+						}
+						let above = key;
+						key = replaceCharacter(key,"U","D");
+						orientation = computeOrientationGeneral(orientation,Ymove);    // update orientation
+						let Umove = movePiece("U",position,above);
+						solution = solution + Umove;    // move piece above target
+						position = above;
+						orientation = computeOrientationGeneral(orientation,Umove);
+						facing = indexOfValue(colorScheme.D,orientation);
+						let chirality = position[0];
+						if (facing == "U"){
+							sequence = (chirality == "R") ? "U'U'RUR'URU'R'" : "UUL'U'LU'L'UL";
+						}
+						if (facing == "F"){
+							sequence = (chirality == "R") ? "URU'R'" : "U'L'UL";
+						}
+						if (facing == "L" || facing == "R"){
+							sequence = (chirality == "R") ? "YU'L'UL" : "Y'URU'R'";
+						}
+						solution = solution + sequence;
+					}else{ //cubie is in first layer
+						let m1 = moveSlice[position[0]][position[2]]["U"];
+						solution = solution + m1 + "U2" + inverse(m1);
+					}
+				}
+				if (sle.indexOf(key) !== -1){    // if cubie is sle
+					if (position.indexOf("U") !== -1){    // if cubie is U layer
+						let colorU = orientation.U;
+						let colorSide = orientation[replaceCharacter(position,"U","")];
+						let colorSideSlice = indexOfValue(colorSide,colorScheme);
+						let Ymove = moveCube["Y"][colorSideSlice]["F"];
+						solution = solution + Ymove;    // move target location to the front
+						let cycleU = ["RU","UF","LU","UB"];
+						let cycleE = ["RF","LF","LB","RB"];
+						if (Ymove.length == 1){
+							position = cycleU[(cycleU.indexOf(position)+1)%4];
+							key = cycleE[(cycleE.indexOf(key)+1)%4];
+						}
+						if (Ymove.length == 2){
+							if (Ymove[1] == "'"){
+								position = cycleU[(cycleU.indexOf(position)+3)%4];
+								key = cycleE[(cycleE.indexOf(key)+3)%4];
+							}else{
+								position = cycleU[(cycleU.indexOf(position)+2)%4];
+								key = cycleE[(cycleE.indexOf(key)+2)%4];
+							}
+						}
+						let newPosition = opposite[replaceCharacter(key,"F","")]+"U";
+						let Umove = movePiece("U",position,newPosition);
+						solution = solution + Umove;
+						position = newPosition;
+						let chirality = position[0];
+						let sequences = {"L":"RU'R'YU'L'UL", "R":"L'ULY'URU'R'"};
+						solution = solution + sequences[chirality];
+					}else{
+						let tempColorScheme = colorScheme;
+						let Ymove = "";
+						if (position.indexOf("B") !== -1){    // if position is in B slice
+							if (position.indexOf("R") !== -1){  // if position is in R slice
+								Ymove = "Y";	
+							}else{    // if target is in L slice
+								Ymove = "Y'";
+							}
+						}
+						solution = solution + Ymove;    // move target location to the front
+						let cycleE = ["RF","LF","LB","RB"];
+						let cycleU = ["RU","UF","LU","UB"];
+						if (Ymove.length == 1){
+							position = cycleE[(cycleE.indexOf(position)+1)%4];
+							key = cycleE[(cycleE.indexOf(key)+1)%4];
+						}
+						if (Ymove.length == 2){
+							if (Ymove[1] == "'"){
+								position = cycleE[(cycleU.indexOf(position)+3)%4];
+								key = cycleE[(cycleE.indexOf(key)+3)%4];
+							}else{
+								position = cycleE[(cycleU.indexOf(position)+2)%4];
+								key = cycleE[(cycleE.indexOf(key)+2)%4];
+							}
+						}
+						tempColorScheme = computeOrientationGeneral(tempColorScheme,Ymove);
+						orientation = computeOrientationGeneral(orientation,Ymove);
+						let chirality = opposite[position[0]];
+						let sequences = {"L":"RU'R'YU'L'UL", "R":"L'ULY'URU'R'"};
+						let Umoves = {"L":["U","U'"],"R":["U'","U"]};
+						let Ymoves = {"L":"Y","R":"Y'"};
+						if (indexOfValue("yellow",orientations[keys.indexOf(keyAtPosition(chirality+"U"))]) !== -1){
+							solution = solution + sequences[chirality];
+						} else if (indexOfValue("yellow",orientations[keys.indexOf(keyAtPosition("UF"))]) !== -1){
+							solution = solution + Umoves[chirality][0] + sequences[chirality];
+						} else if (indexOfValue("yellow",orientations[keys.indexOf(keyAtPosition("UB"))]) !== -1){
+							solution = solution + Umoves[chirality][1] + sequences[chirality];
+						} else{
+							solution = solution + "U2" + sequences[chirality];
+						}
+						Ymove = Ymoves[chirality];
+						if (Ymove.length == 1){
+							position = cycleU[(cycleU.indexOf(position)+1)%4];
+							key = cycleE[(cycleE.indexOf(key)+1)%4];
+						}
+						if (Ymove.length == 2){
+							if (Ymove[1] == "'"){
+								position = cycleU[(cycleU.indexOf(position)+3)%4];
+								key = cycleE[(cycleE.indexOf(key)+3)%4];
+							}else{
+								position = cycleU[(cycleU.indexOf(position)+2)%4];
+								key = cycleE[(cycleE.indexOf(key)+2)%4];
+							}
+						}
+						tempColorScheme = computeOrientationGeneral(tempColorScheme,Ymove);
+						orientation = computeOrientationGeneral(orientation,opposite[chirality]);					
+						let colorU = orientation.U;
+						let colorSide = orientation[replaceCharacter(position,"U","")];
+						let colorSideSlice = indexOfValue(colorSide,tempColorScheme);	
+						Ymove = moveCube["Y"][colorSideSlice]["F"];
+						solution = solution + Ymove;    // move target location to the front
+						
+						if (Ymove.length == 1){
+							position = cycleU[(cycleU.indexOf(position)+1)%4];
+							key = cycleE[(cycleE.indexOf(key)+1)%4];
+						}
+						if (Ymove.length == 2){
+							if (Ymove[1] == "'"){
+								position = cycleU[(cycleU.indexOf(position)+3)%4];
+								key = cycleE[(cycleE.indexOf(key)+3)%4];
+							}else{
+								position = cycleU[(cycleU.indexOf(position)+2)%4];
+								key = cycleE[(cycleE.indexOf(key)+2)%4];
+							}
+						}
+						let newPosition = opposite[replaceCharacter(key,"F","")]+"U";
+						let Umove = movePiece("U",position,newPosition);
+						solution = solution + Umove;
+						position = newPosition;
+						chirality = position[0];
+						solution = solution + sequences[chirality];
+					}
+				}
+			}else{    // Solve third layer
+				let LLcase = pickLLcase();
+				if (LLcase == "TLEO1"){
+					solution = solution + "FRUR'U'F'";
+				}
+				if (LLcase == "TLEO2"){
+					let cubie1 = orientedTLE[0];
+					let cubie2 = orientedTLE[1];
+					if (movePiece("U",currentPosition(cubie1),"LU") == movePiece("U",currentPosition(cubie2),"UB")){
+						solution = solution + movePiece("U",currentPosition(cubie1),"LU");
+					}else{
+						solution = solution + movePiece("U",currentPosition(cubie1),"UB");
+					}
+					solution = solution + "FRUR'U'F'";
+				}
+				if (LLcase == "TLEO3"){
+					alert('hi');
+					/*
+					if (currentPosition(orientedTLE[0]) == "LU" || currentPosition(orientedTLE[0]) == "RU"){
+						solution = solution + "FRUR'U'F'";
+					}else{
+						//solution = solution + "UFRUR'U'F'";
+					}
+					*/
 				}
 			}
 			beginSequence(solution);
@@ -546,11 +785,15 @@
 				beginSequence(e.key + "'");
 			}	
 			if (e.key == 'o'){
-				alert(currentPosition("RUF"));
-				printObject(orientations[keys.indexOf("LD")]);
+				//alert(currentPosition("RUF"));
+				//printObject(keys);
+				//alert(cubieSolved("RUF"));
+
 			}
 			if (e.key == 'p'){
-				beginSequence("B  U'  F  R2  L'  U2  F'  D  F'  R  B2  F2  U'  R'  B2  U2  F  R  L  F  L'  D  U2  F  D2");
+				//beginSequence("RUR'U2RU'R'U2RU'R'L'ULUFU'F'");
+				//beginSequence("L'U'LU2L'ULU2L'ULRU'R'U'F'UF");
+				beginSequence("D2  B'  U2  D'  R2  B  F  L  R'  F2  R  D2  U2  B'  R'  B'  U  L2  B  L'  F  L2  B2  R  B'");
 			}
 			if (e.key == 'k'){
 				beginnerMethod();
