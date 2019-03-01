@@ -14,7 +14,6 @@
 </head>
 <body>
 	<script src="three.min.js"></script>
-	<script src="Math.js"></script>
 	<script src='OrbitControls.js'></script>
 	<script>
 		// ------------------------------------------------------------ Scene ------------------------------------------------------------
@@ -154,6 +153,14 @@
 			return output;
 		}
 		
+		function indexOfValue(val, object){
+			for (var index in object){
+				if (object[index] == val){
+					return index;
+				}
+			}
+		}
+		
 		// ------------------------------------------------------------ End Objects ------------------------------------------------------------
 		
 		// ------------------------------------------------------------ Start Transformations ------------------------------------------------------------
@@ -165,7 +172,7 @@
 
 		function computeOrientation(orientation, slice, inverse){
 			var clone = cloneObject(orientation);
-			var dict = {'R':'FUBD', 'L':'DBUF', 'U':'RFLB', 'D':'BLFR', 'F':'RDLU', 'B':'ULDR', 'M':'FDBU', 'E':'FRBL', 'S':'RDLU', 'X':'UBDF', 'Y':'LBRF', 'Z':'RDLU'};
+			var dict = {'R':'FUBD', 'L':'DBUF', 'U':'RFLB', 'D':'BLFR', 'F':'RDLU', 'B':'ULDR', 'M':'FDBU', 'E':'FRBL', 'S':'RDLU', 'X':'FDBU', 'Y':'FRBL', 'Z':'ULDR'};
 			var cycle = inverse ? dict[slice].split("").reverse().join("") : dict[slice];    // for example (R not inverse), cycle = 'FUBD'
 			var cycled = cycle.substring(3,4) + cycle.substring(0,3);    // then, cycled = 'DFUB'
 			var lastColor = clone[cycled[0]];    // store D color
@@ -175,35 +182,40 @@
 			clone[cycle[0]] = lastColor;    // F gets D color
 			return clone;
 		}
-		function replaceCharacter(word, index, newCharacter){
+		function replaceCharacter(word, oldCharacter, newCharacter){
 			word = word.split("");
-			word[index] = newCharacter;
+			index = word.indexOf(oldCharacter);
+			word.splice(index,1,newCharacter);
 			word = word.join("");
 			return word;
 		}
-		function updateKeys(slice, inverse){    // for example, M not inverse
-			function swap1(match, p1, p2){
-				return p2 + p1;
-			}
-			function swap2(match, p1, p2, p3){
-				return p1 + p3 + p2;
-			}
-			if ("MESXYZ".indexOf(slice) == -1) return 0;    // escape function if not moving centers
-			var dict = {'M':'FDBU', 'E':'FRBL', 'S':'RDLU', 'X':'UBDF', 'Y':'LBRF', 'Z':'RDLU'};
-			var cycle = inverse ? dict[slice].split("").reverse().join("") : dict[slice];    // cycle = 'FDBU'
-			for (var i = 0; i < 27; i++){    // i = 0:
-				let key = keys[i];    // key = "LUF"
-				for (var j in key){    // j = 0,  j = 1, j = 2
-					let index = cycle.indexOf(key[j]);    // index =  -1, index = 3, index = 0
-					if (index !== -1){
-						key = replaceCharacter(key, j, cycle[(index + 1)%4]);   // key = LUF, key = LFF, key = LFD
-					}
-				}
-				key = key.replace(/([UDFB]+)([RL])/g, swap1);
-				key = key.replace(/([RL])([FB])([UD])/g, swap2);
-				keys[i] = key;    // replace key with updated key
-			}
+		
+		var keyPermutations = {    // X,Y,Z hardcoded, X',Y',Z' computed from those using Python
+			"X":[6,7,8,15,16,17,24,25,26, 3,4,5,12,13,14,21,22,23, 0,1,2,9,10,11,18,19,20],
+			"X'":[18,19,20,9,10,11,0,1,2, 21,22,23,12,13,14,3,4,5, 24,25,26,15,16,17,6,7,8],
+			"Y":[6,3,0,7,4,1,8,5,2, 15,12,9,16,13,10,17,14,11, 24,21,18,25,22,19,26,23,20],
+			"Y'":[2, 5, 8, 1, 4, 7, 0, 3, 6, 11, 14, 17, 10, 13, 16, 9, 12, 15, 20, 23, 26, 19, 22, 25, 18, 21, 24],
+			"Z":[2,11,20,5,14,23,8,17,26, 1,10,19,4,13,22,7,16,25, 0,9,18,3,12,21,6,15,24],
+			"Z'":[18, 9, 0, 21, 12, 3, 24, 15, 6, 19, 10, 1, 22, 13, 4, 25, 16, 7, 20, 11, 2, 23, 14, 5, 26, 17, 8]
 		}
+		
+		function updateKeys(move, inverse){
+			let dict = {'X':'FDBU', 'Y':'FRBL', 'Z':'ULDR'};
+			let cycle = inverse ? dict[move].reverse() : dict[move];
+			if (inverse) move = move + "'";
+			perm = keyPermutations[move];
+			newKeys = Array(27).fill("");
+			for (let i = 0; i < 27; i++){
+				newKeys[i] = keys[perm[i]];
+			}
+			keys = newKeys;
+			let newColorScheme = colorScheme;
+			for (let i = 0; i < 4; i++){
+				newColorScheme[cycle[i]] = colorScheme[cycle[(i+1)%4]];
+			}
+			colorScheme = newColorScheme;
+		}
+
 		var steps = 20;
 		var theta = Math.PI / ( 2 * steps );
 		var rotationMatrices = {
@@ -222,6 +234,7 @@
 			'S':new THREE.Matrix4().makeRotationZ( theta ), 'X':new THREE.Matrix4().makeRotationX( theta ),
 			'Y':new THREE.Matrix4().makeRotationY( theta ), 'Z':new THREE.Matrix4().makeRotationZ( theta )
 		}
+		var waitTime = 450;
 		//var allowed = {'value':true};
 		function beginSequence(sequence) {
 			if (sequence == "") return null;    // Cancel function if no moves left in the sequence
@@ -236,6 +249,7 @@
 			function cleaner(match) {
 				return ""
 			}
+			sequence = sequence.replace(/\s+/g, '');
 			sequence = sequence.replace(/([RLUDFBMESXYZ])(\d)/g, multiplier);	// if single character is followed by a number
 			sequence = sequence.replace(/([(][RLUDFBMESXYZ']+[)])(\d)/g, multiplier);    // if block of characters inside parentheses is followed by a number
 			sequence = sequence.replace(/[()]/g, cleaner);    // remove parentheses
@@ -255,7 +269,7 @@
 				inverse = false;
 				sequence = sequence.substring(1, sequence.length);
 			}
-			updateKeys(slice, inverse);
+			
 			var step = 0;
 			var sliceCubies = [ ]; 
 			var dict = {'R':['x',1], 'L':['x',-1], 'U':['y',1], 'D':['y',-1], 'F':['z',1], 'B':['z',-1], 'M':['x',0], 'E':['y',0], 'S':['z',0]}; // Eace slice is determined by the value of the relevant coordinate
@@ -264,16 +278,21 @@
 			if ("XYZ".indexOf(slice) !== -1){
 				for (var i = 0; i < 27; i++){
 					sliceCubies.push(cubies[i]);
-					orientations[i] = computeOrientation(orientations[i], slice, inverse);
 				}
+				updateKeys(slice,inverse);
 			} else{
 				for ( var i = 0 ; i < 27 ; i++ ) {		// Get slice
 					if ( cubies[ i ].position[ dict[ slice ][0] ] == dict[ slice ][1] ) { // if relevant coordinate of cubie equals corresponding value in dict, extract that cubie.
 						sliceCubies.push( cubies[ i ] );
-						orientations[i] = computeOrientation(orientations[i], slice, inverse);
+						//orientations[i] = computeOrientation(orientations[i], slice, inverse);
 					}
 				}
 			}
+			for (var i = 0; i < sliceCubies.length; i++) {
+				let cubieIndex = cubies.indexOf(sliceCubies[i]);
+				orientations[cubieIndex] = computeOrientation(orientations[cubieIndex], slice, inverse);
+			}
+			
 			var animate = function( ){
 				if (step < steps){ 
 					for (var i = 0; i < sliceCubies.length; i++){
@@ -312,7 +331,7 @@
 				}	// end if
 			};	// end animate definition
 			requestAnimationFrame( animate );
-			setTimeout(function(){executeSequence(sequence)}, 450);
+			setTimeout(function(){executeSequence(sequence)}, waitTime);
 			//}
 		}	// end executeSequence definition
 
@@ -343,6 +362,7 @@
 			return correct.equals(cubies[keys.indexOf(key)].position)
 			*/
 		}
+			
 		function correctOrientation(key){
 			var correct = true;
 			var orientation = orientations[keys.indexOf(key)];
@@ -364,11 +384,12 @@
 		function inverse(turn){
 			if (turn == "") return turn;
 			if (turn.length == 1) return turn + "'";
-			if (turn[2] == "'") return turn[1];
+			if (turn[1] == "'") return turn[0];
 			return turn;
 		}
+		
 		var opposite = {'R':'L', 'L':'R', 'U':'D', 'D':'U', 'F':'B', 'B':'F'};
-		var moveSlice = {
+		var moveSlice = {	// All of this is hardcoded to make my life easy later.
 			"R":{"U":{"U":"","F":"R'","B":"R","D":"R2"},"F":{"F":"","U":"R","B":"R2","D":"R'"},"B":{"B":"","D":"R","U":"R'","F":"R2"},"D":{"D":"","U":"R2","F":"R","B":"R'"}},
 			"L":{"U":{"U":"","F":"L","B":"L'","D":"L2"},"F":{"F":"","U":"L'","B":"L2","D":"L"},"B":{"B":"","D":"L'","U":"L","F":"L2"},"D":{"D":"","U":"L2","F":"L'","B":"L"}},
 			"U":{"R":{"R":"","L":"U2","F":"U","B":"U'"},"L":{"R":"U2","L":"","F":"U'","B":"U"},"F":{"R":"U'","L":"U","F":"","B":"U2"},"B":{"R":"U","L":"U'","F":"U2","B":""}},
@@ -376,84 +397,142 @@
 			"F":{"R":{"R":"","L":"F2","U":"F'","D":"F"},"L":{"L":"","R":"F2","U":"F","D":"F'"},"U":{"U":"","D":"F2","R":"F","L":"F'"},"D":{"D":"","U":"F2","R":"F'","L":"F"}},
 			"B":{"R":{"R":"","L":"B2","U":"B","D":"B'"},"L":{"L":"","R":"B2","U":"B'","D":"B"},"U":{"U":"","D":"B2","R":"B'","L":"B"},"D":{"D":"","U":"B2","R":"B","L":"B'"}}
 		}
-
-		function beginnerMethod() {
-			function matMult(vector, turn){
-				clone = vector.clone();
-				var angle = Math.PI / 2;
-				var rotationMatrices = {	// Used for computing where a piece would be after a given rotation
-					'R':new THREE.Matrix4().makeRotationX( -1*angle ) , 'L':new THREE.Matrix4().makeRotationX( angle ) ,
-					'U':new THREE.Matrix4().makeRotationY( -1*angle ) , 'D':new THREE.Matrix4().makeRotationY( angle ) ,
-					'F':new THREE.Matrix4().makeRotationZ( -1*angle ) , 'B':new THREE.Matrix4().makeRotationZ( angle ),
-					"R'":new THREE.Matrix4().makeRotationX( angle ) , "L'":new THREE.Matrix4().makeRotationX( -1*angle ) ,
-					"U'":new THREE.Matrix4().makeRotationY( angle ) , "D'":new THREE.Matrix4().makeRotationY( -1*angle ) ,
-					"F'":new THREE.Matrix4().makeRotationZ( angle ) , "B'":new THREE.Matrix4().makeRotationZ( -1*angle )
-				};
-				clone.applyMatrix4(rotationMatrices[turn]);
-				clone.x = Math.round(clone.x);
-				clone.y = Math.round(clone.y);
-				clone.z = Math.round(clone.z);
-				return clone
+		function movePiece(slice, from, to){
+			// Returns same move info as moveSlice, but can work on positional keys directly
+			if (from.length !== to.length) return "";
+			from = from.split("");
+			to = to.split("");
+			from.splice(from.indexOf(slice),1);
+			to.splice(to.indexOf(slice),1);
+			if (from.length == 1){
+				return moveSlice[slice][from[0]][to[0]];
+			}else{
+				var from1 = from[0];
+				var from2 = from[1];
+				var to1 = to[0];
+				var to2 = to[1];
+				return (moveSlice[slice][from1][to1] == moveSlice[slice][from2][to2]) ? moveSlice[slice][from2][to2] : moveSlice[slice][from1][to2];
 			}
-			
-			var flEdges = ['DF', 'LD', 'RD', 'DB'];
-			var flCorners = ['LDF', 'RDF', 'LDB', 'RDB'];
-			var slEdges = ['LF', 'RF', 'LB', 'RB'];
-			var tlEdges = ['UF', 'LU', 'RU', 'UB'];
-			var tlCorners = ['LUF', 'RUF', 'LUB', 'RUB'];
-			var dict = { 'R':['x',1], 'L':['x',-1], 'U':['y',1], 'D':['y',-1], 'F':['z',1], 'B':['z',-1] };
-			var opposite = {'R':'L', 'L':'R', 'U':'D', 'D':'U', 'F':'B', 'B':'F'};
+		}
+		var moveCube = {
+			"Y":{"R":{"R":"","F":"Y","L":"Y2","B":"Y'"},"L":{"L":"","B":"Y","R":"Y2","F":"Y'"},"F":{"F":"","L":"Y","B":"Y2","R":"Y'"},"B":{"B":"","R":"Y","F":"Y2","L":"Y2"}}
+		}
+		function doMove(move){
+			beginSequence(move);
+			if (move.length == 1){
+				setTimeout(function(){},waitTime+50);
+			}
+			if (move.length == 2){
+				if (move[1] == "'"){
+					setTimeout(function(){},waitTime+50);
+				}
+				if (move[1] == ["2"]){
+					setTimeout(function(){},2*waitTime+50);
+				}
+			}
+		}
+		
+		var fle = ['DF', 'LD', 'RD', 'DB'];
+		var flc = ['LDF', 'RDF', 'LDB', 'RDB'];
+		var sle = ['LF', 'RF', 'LB', 'RB'];
+		var tle = ['UF', 'LU', 'RU', 'UB'];
+		var tlc = ['LUF', 'RUF', 'LUB', 'RUB'];
+		var opposite = {'R':'L', 'L':'R', 'U':'D', 'D':'U', 'F':'B', 'B':'F'};
+				
+		function beginnerMethod(){
+			var fleSolved = false;
+			var flcSolved= false;
+			var sleSolved = false;
+			var tleOriented = false;
+			var tlcOriented = false;
+			var tlcPermuted = false;
+			var tlePermuted = false;
+			var unsolvedFLE = [];
+			var unsolvedFLC = [];
+
+			function pickCubie(){
+				for (let i = 0; i < 4; i++){ 
+					if (!cubieSolved(fle[i])){
+						return fle[i];
+					}
+				}
+				for (let i = 0; i < 4; i++){ 
+					if (!cubieSolved(flc[i])){
+						return flc[i];
+					}
+				}
+					
+			}		
 			var solution = "";    // this will store the solution to the current step, not necessarily the full solution
-			var unsolvedFLE = [];	// unsolved first layer edges
-
-			for (let i = 0; i < 4; i++){
-				if (!cubieSolved(flEdges[i])){
-					unsolvedFLE.push(flEdges[i]);
+			var key = pickCubie();
+			var position = currentPosition(key);
+			var orientation = orientations[keys.indexOf(key)];
+			if (fle.indexOf(key) !== -1){    // if cubie is fle
+				let facing = indexOfValue(colorScheme.D, orientation);
+				if (position.indexOf("U") !== -1){    // if cubie is in third layer
+					let posMinusU = replaceCharacter(position,"U","");
+					alert(moveCube["Y"][posMinusU]["F"]);
+					doMove(moveCube["Y"][posMinusU]["F"]);
+					position = currentPosition(key);
+					orientation = orientations[keys.indexOf(key)];
+					doMove(movePiece("U",position,"LU"));
+					position = currentPosition(key);
+					orientation = orientations[keys.indexOf(key)];
+					if (facing == "U"){
+						doMove("F2");
+					}
+				}
+				if (position.indexOf('U') == -1 && position.indexOf('D') == - 1){    // if cubie is in second layer
+					let slice = (position[0] == facing) ? position[1] : position[0];
+					let to = (key[0] === 'D') ? key[1] : key[0];
+					solution = solution + moveSlice["D"][to][slice] + moveSlice[slice][facing]["D"] + moveSlice["D"][slice][to];
+				}
+				if (position.indexOf("D") !== -1){    // if cubie is in first layer
+					let from = (position[0] === "D") ? position[1] : position[0]; // Which vertical face is the cubie in?
+					let to = (key[0] === 'D') ? key[1] : key[0];    // Which vertical face does the cubie belong in?
+					let slice = (from == "R") ? "F" : "FLBR"["FLBR".indexOf(from) + 1];
+					if (facing == "U"){    // If cubie is vertically oriented
+						solution = solution + from + moveSlice["D"][to][from] + from + "'" + moveSlice["D"][from][to];
+					}else{
+						solution = solution + from + moveSlice["D"][to][slice] + moveSlice[slice][from]["D"] + moveSlice["D"][slice][to];
+					}
 				}
 			}
-			for (var index in unsolvedFLE){    // Solving first layer edges
-				let key = unsolvedFLE[index];  // RD
-				let position = currentPosition(key);  //RU
-				let orientation = orientations[keys.indexOf(key)];
-				if (position.indexOf("U") !== -1){    // if cubie is in first layer
-					if (orientations[keys.indexOf(key)].U === orientations[keys.indexOf("D")].D){ // if cubie is vertically oriented
-						//alert(moveSlice["U"][from][to]);
-						let from = (position[0] === "U") ? position[1] : position[0];
-						let to = (key[0] === 'D') ? key[1] : key[0];
-						solution = solution + moveSlice["U"][from][to] + to + "2";
-						// otherSide removed, so no solving yet.
-						if (cubies[keys.indexOf(key)].position[dict[otherSide][0]] === dict[otherSide][1]){    // if cubie is positioned directly above correct position
-							solution = solution + otherSide + otherSide;
-							break;
-						}
-						if (cubies[keys.indexOf(key)].position[dict[otherSide][0]] === dict[opposite[otherSide]][1]){    // if cubie is positioned opposite correct position
-							solution = solution + "U2" + otherSide + otherSide;
-							break;
-						}
-						if (matMult(position, "U")[dict[otherSide][0]] === dict[otherSide][1]){    // if cubie is a U turn from being above correct position
-							solution = solution + "U" + otherSide + otherSide;
-							break;
-						}
-						else{    // else, cubie is a U' turn away from being above correct position
-							solution = solution + "U'" + otherSide + otherSide;    
-							break;
-						}
+			if (flc.indexOf(key) !== -1){    // if cubie is flc
+				let facing = indexOfValue(colorScheme.D, orientation);
+				if (position.indexOf("U") !== -1){    // if cubie is in third layer
+					above = replaceCharacter(key,"D","U"); //RUF
+					solution = solution + movePiece("U",position,above);
+					if (solution.length == 1){
+						orientation = computeOrientation(orientation,"U",false);
 					}
-					else{    // else, cubie is not oriented vertically
-						//if (to.indexOf("R") !== -1) solution = solution + moveSlice["U"][
-						if (matMult(position, "U").z === 1) solution = solution + "U";    
-						if (matMult(position, "U'").z === 1) solution = solution + "U'";
-						if (matMult(matMult(position, "U"), "U").z === 1) solution = solution + "U2";
-						if (otherSide === "R") solution = solution + "D'U'R'FRD";
-						if (otherSide === "L") solution = solution + "DU'R'FRD'";
-						if (otherSide === "B") solution = solution + "D2U'R'FRD2";
-						if (otherSide === "F") solution = solution + "U'R'FR";
-						break;
+					if (solution.length == 2){
+						orientation = (solution[1] == "'") ? computeOrientation(orientation,"U",true) : computeOrientation(computeOrientation(orientation,"U",false),"U",false);
 					}
-				}
-				if (position.indexOf('U') == -1 && position.indexOf('D') == - 1){    // if cubie is in second layer // e.g., key = 'RD' , position = 'RF']]
-					if (computeOrientation(orientation, turnSlice[position[0]][position[1]].D, false).D === orientations[keys.indexOf('D')].D) {
+					facing = indexOfValue(colorScheme.D, orientation);
+					let minusU = replaceCharacter(above,"U",""); //RF
+					if (facing == "U"){    // if vertically oriented
+						let side1 = minusU[0]; //R
+						let side2 = minusU[1]; //F
+						let intermediate1 = replaceCharacter(replaceCharacter(above,above[0],opposite[above[0]]),above[2],opposite[above[2]]);
+						let intermediate2 = replaceCharacter(above,side2,opposite[side2]);
+						let m1 = moveSlice[side1][side2]["U"]; //R
+						let m2 = movePiece("U",intermediate1,intermediate2); //U
+						let m3 = inverse(m1); //R'
+						solution = solution + "U2" + m1 + m2 + m3 + m2 + m1 + inverse(m2) + m3;
+						
+					}else{
+						to = minusU[minusU.indexOf(facing)]; //F
+						from = minusU[1-minusU.indexOf(facing)]; //R
+						let m1 = moveSlice["U"][from][to]; //U
+						let m2 = moveSlice[from][facing]["U"]; //R
+						let m3 = moveSlice["U"][to][from]; //U'
+						let m4 = moveSlice[from]["U"][facing]; //R'
+						solution = solution + m1 + m2 + m3 + m4;
 					}
+				}else{ //cubie is in first layer
+					let m1 = moveSlice[position[0]][position[2]]["U"];
+					solution = solution + m1 + "U2" + inverse(m1);
 				}
 			}
 			beginSequence(solution);
@@ -467,11 +546,16 @@
 				beginSequence(e.key + "'");
 			}	
 			if (e.key == 'o'){
-				beginnerMethod();
+				alert(currentPosition("RUF"));
+				printObject(orientations[keys.indexOf("LD")]);
 			}
 			if (e.key == 'p'){
-				beginSequence(tperm);
+				beginSequence("B  U'  F  R2  L'  U2  F'  D  F'  R  B2  F2  U'  R'  B2  U2  F  R  L  F  L'  D  U2  F  D2");
 			}
+			if (e.key == 'k'){
+				beginnerMethod();
+			}
+			
 		}
 		window.addEventListener('keydown', handleKeyDown, false);
 		
