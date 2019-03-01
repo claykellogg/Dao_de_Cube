@@ -417,7 +417,7 @@
 		}
 		
 		var opposite = {'R':'L', 'L':'R', 'U':'D', 'D':'U', 'F':'B', 'B':'F'};
-		var moveSlice = {	// All of this is hardcoded to make my life easy later.
+		var moveSlice = {		// All of this is hardcoded to make my life easy later.
 			"R":{"U":{"U":"","F":"R'","B":"R","D":"R2"},"F":{"F":"","U":"R","B":"R2","D":"R'"},"B":{"B":"","D":"R","U":"R'","F":"R2"},"D":{"D":"","U":"R2","F":"R","B":"R'"}},
 			"L":{"U":{"U":"","F":"L","B":"L'","D":"L2"},"F":{"F":"","U":"L'","B":"L2","D":"L"},"B":{"B":"","D":"L'","U":"L","F":"L2"},"D":{"D":"","U":"L2","F":"L'","B":"L"}},
 			"U":{"R":{"R":"","L":"U2","F":"U","B":"U'"},"L":{"R":"U2","L":"","F":"U'","B":"U"},"F":{"R":"U'","L":"U","F":"","B":"U2"},"B":{"R":"U","L":"U'","F":"U2","B":""}},
@@ -928,7 +928,7 @@
 			beginSequence(solution);
 		}
 		
-		var promise = navigator.mediaDevices.getUserMedia({audio:false,video:true});
+		//var promise = navigator.mediaDevices.getUserMedia({audio:false,video:true});
 		
 		function handleKeyDown(e){
 			if (e.key=='r'||e.key=='l'||e.key=='u'||e.key=='d'||e.key=='f'||e.key=='b'||e.key=='m'||e.key=='e'||e.key=='s'||e.key=='x'||e.key=='y'||e.key=='z'){
